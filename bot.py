@@ -274,5 +274,3 @@ async def check_balance(
 
 # Arranque seguro con la variable de entorno para la nube
 bot.run(os.environ["DISCORD_TOKEN"])
-# Arranque del bot (recuerda usar tu token local o de entorno según prefieras)
-bot.run(os.environ["DISCORD_TOKEN"])
