@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import discord
 from discord import app_commands
@@ -32,7 +33,7 @@ async def on_ready():
     print(e)
 
 
-# 3. Comando Slash: /add_balance (Exclusivo para Staff / Administradores)
+# 3. Comando Slash: /add_balance (Exclusivo para Staff)
 @bot.tree.command(
     name="add_balance",
     description="Adds an amount to a customer's total spent balance.",
@@ -70,7 +71,7 @@ async def add_balance(
   )
   conn.commit()
 
-  # Diseño de Recibo Profesional (Público)
+  # Recibo Profesional (Azul - Ingreso)
   embed = discord.Embed(
       title="🧾 MONTOYA SERVICES — PAYMENT RECORD",
       color=discord.Color.from_rgb(20, 110, 180),
@@ -103,7 +104,81 @@ async def add_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 4. Comando Slash: /check_balance (Público para que los clientes consulten su saldo)
+# 4. NUEVO Comando Slash: /remove_balance (Exclusivo para Staff - Corrección)
+@bot.tree.command(
+    name="remove_balance",
+    description="Removes an amount from a customer's total spent balance.",
+)
+@app_commands.describe(
+    customer="The customer user to remove the balance from",
+    amount="The money amount to remove (e.g. 20.00)",
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def remove_balance(
+    interaction: discord.Interaction, customer: discord.Member, amount: float
+):
+  if amount <= 0:
+    await interaction.response.send_message(
+        "The amount must be greater than 0.", ephemeral=True
+    )
+    return
+
+  user_id = customer.id
+
+  cursor.execute(
+      "SELECT balance FROM customer_balances WHERE user_id = ?", (user_id,)
+  )
+  resultado = cursor.fetchone()
+
+  previous_balance = resultado[0] if resultado else 0.0
+  # Restamos, asegurándonos de que el balance nunca baje de 0
+  new_balance = max(0.0, previous_balance - amount)
+
+  cursor.execute(
+      """
+        INSERT INTO customer_balances (user_id, balance) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET balance = ?
+    """,
+      (user_id, new_balance, new_balance),
+  )
+  conn.commit()
+
+  # Recibo de Corrección (Rojo/Naranja - Resta)
+  embed = discord.Embed(
+      title="⚠️ MONTOYA SERVICES — BALANCE CORRECTION",
+      color=discord.Color.from_rgb(215, 50, 50),
+  )
+
+  embed.add_field(
+      name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
+  )
+  embed.add_field(
+      name="🛠️ Staff",
+      value=f"{interaction.user.mention}\n`[{interaction.user.id}]`",
+      inline=True,
+  )
+
+  embed.add_field(
+      name="💸 Amount Removed", value=f"`-${amount:.2f}`", inline=False
+  )
+  embed.add_field(
+      name="📊 Previous Balance",
+      value=f"`${previous_balance:.2f}`",
+      inline=False,
+  )
+  embed.add_field(
+      name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
+  )
+
+  embed.set_footer(
+      text="MonToya Services • Correction System",
+      icon_url=bot.user.avatar.url if bot.user.avatar else None,
+  )
+
+  await interaction.response.send_message(embed=embed)
+
+
+# 5. Comando Slash: /check_balance (Consulta pública/privada de saldo)
 @bot.tree.command(
     name="check_balance", description="Check your total spent balance."
 )
@@ -113,7 +188,6 @@ async def add_balance(
 async def check_balance(
     interaction: discord.Interaction, customer: discord.Member = None
 ):
-  # Si intentan revisar a otra persona sin ser Administrador/Staff, se les bloquea
   if customer and customer.id != interaction.user.id:
     if not interaction.user.guild_permissions.administrator:
       await interaction.response.send_message(
@@ -122,10 +196,8 @@ async def check_balance(
       return
     target_user = customer
   else:
-    # Si no especifica a nadie, revisa su propio saldo
     target_user = interaction.user
 
-  # Consultar balance en la base de datos
   cursor.execute(
       "SELECT balance FROM customer_balances WHERE user_id = ?", (target_user.id,)
   )
@@ -149,9 +221,10 @@ async def check_balance(
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
   )
 
-  # Al quitar ephemeral=True, este mensaje será visible para todos en el canal
   await interaction.response.send_message(embed=embed)
 
 
+# Arranque seguro con la variable de entorno para la nube
+bot.run(os.environ["DISCORD_TOKEN"])
 # REEMPLAZA 'TU_TOKEN_AQUI' CON TU TOKEN REAL
 bot.run(os.environ["DISCORD_TOKEN"])
