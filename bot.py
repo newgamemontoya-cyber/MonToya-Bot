@@ -4,18 +4,41 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 1. Configuración de la Base de Datos (SQLite)
-conn = sqlite3.connect("database.db")
-cursor = conn.cursor()
+# Detectar si estamos en Render (Nube) o en la PC (Local)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-cursor.execute(
+if DATABASE_URL:
+  # Conexión para PostgreSQL en Render (Nube - Persistente)
+  import psycopg2
+
+  conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+  cursor = conn.cursor()
+  is_postgres = True
+else:
+  # Conexión local para tu PC (SQLite)
+  conn = sqlite3.connect("database.db")
+  cursor = conn.cursor()
+  is_postgres = False
+
+# Crear la tabla según el tipo de base de datos
+if is_postgres:
+  cursor.execute(
+      """
+        CREATE TABLE IF NOT EXISTS customer_balances (
+            user_id BIGINT PRIMARY KEY,
+            balance REAL
+        )
     """
-    CREATE TABLE IF NOT EXISTS customer_balances (
-        user_id INTEGER PRIMARY KEY,
-        balance REAL
-    )
-"""
-)
+  )
+else:
+  cursor.execute(
+      """
+        CREATE TABLE IF NOT EXISTS customer_balances (
+            user_id INTEGER PRIMARY KEY,
+            balance REAL
+        )
+    """
+  )
 conn.commit()
 
 # 2. Configuración del Bot de Discord
@@ -33,7 +56,28 @@ async def on_ready():
     print(e)
 
 
-# 3. Comando Slash: /add_balance (Staff primero, Customer después)
+# Función auxiliar para guardar datos compatible con ambos sistemas
+def guardar_balance(user_id, new_balance):
+  if is_postgres:
+    cursor.execute(
+        """
+            INSERT INTO customer_balances (user_id, balance) VALUES (%s, %s)
+            ON CONFLICT (user_id) DO UPDATE SET balance = %s
+        """,
+        (user_id, new_balance, new_balance),
+    )
+  else:
+    cursor.execute(
+        """
+            INSERT INTO customer_balances (user_id, balance) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET balance = ?
+        """,
+        (user_id, new_balance, new_balance),
+    )
+  conn.commit()
+
+
+# 3. Comando Slash: /add_balance
 @bot.tree.command(
     name="add_balance",
     description="Adds an amount to a customer's total spent balance.",
@@ -54,36 +98,31 @@ async def add_balance(
 
   user_id = customer.id
 
-  cursor.execute(
-      "SELECT balance FROM customer_balances WHERE user_id = ?", (user_id,)
-  )
-  resultado = cursor.fetchone()
+  if is_postgres:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = %s", (user_id,)
+    )
+  else:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = ?", (user_id,)
+    )
 
+  resultado = cursor.fetchone()
   previous_balance = resultado[0] if resultado else 0.0
   new_balance = previous_balance + amount
 
-  cursor.execute(
-      """
-        INSERT INTO customer_balances (user_id, balance) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET balance = ?
-    """,
-      (user_id, new_balance, new_balance),
-  )
-  conn.commit()
+  guardar_balance(user_id, new_balance)
 
-  # Recibo Profesional (Staff primero, Customer después)
   embed = discord.Embed(
       title="🧾 MONTOYA SERVICES — PAYMENT RECORD",
       color=discord.Color.from_rgb(20, 110, 180),
   )
 
-  # Primero el Staff
   embed.add_field(
       name="🛠️ Staff",
       value=f"{interaction.user.mention}\n`[{interaction.user.id}]`",
       inline=True,
   )
-  # Después el Customer
   embed.add_field(
       name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
   )
@@ -98,9 +137,7 @@ async def add_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
-  # Foto de perfil del cliente en la miniatura
   embed.set_thumbnail(url=customer.display_avatar.url)
-
   embed.set_footer(
       text="MonToya Services • Payment System",
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
@@ -109,7 +146,7 @@ async def add_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 4. Comando Slash: /remove_balance (Staff primero, Customer después)
+# 4. Comando Slash: /remove_balance
 @bot.tree.command(
     name="remove_balance",
     description="Removes an amount from a customer's total spent balance.",
@@ -130,36 +167,31 @@ async def remove_balance(
 
   user_id = customer.id
 
-  cursor.execute(
-      "SELECT balance FROM customer_balances WHERE user_id = ?", (user_id,)
-  )
-  resultado = cursor.fetchone()
+  if is_postgres:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = %s", (user_id,)
+    )
+  else:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = ?", (user_id,)
+    )
 
+  resultado = cursor.fetchone()
   previous_balance = resultado[0] if resultado else 0.0
   new_balance = max(0.0, previous_balance - amount)
 
-  cursor.execute(
-      """
-        INSERT INTO customer_balances (user_id, balance) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET balance = ?
-    """,
-      (user_id, new_balance, new_balance),
-  )
-  conn.commit()
+  guardar_balance(user_id, new_balance)
 
-  # Recibo de Corrección (Staff primero, Customer después)
   embed = discord.Embed(
       title="⚠️ MONTOYA SERVICES — BALANCE CORRECTION",
       color=discord.Color.from_rgb(215, 50, 50),
   )
 
-  # Primero el Staff
   embed.add_field(
       name="🛠️ Staff",
       value=f"{interaction.user.mention}\n`[{interaction.user.id}]`",
       inline=True,
   )
-  # Después el Customer
   embed.add_field(
       name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
   )
@@ -176,9 +208,7 @@ async def remove_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
-  # Foto de perfil del cliente en la miniatura
   embed.set_thumbnail(url=customer.display_avatar.url)
-
   embed.set_footer(
       text="MonToya Services • Correction System",
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
@@ -207,9 +237,17 @@ async def check_balance(
   else:
     target_user = interaction.user
 
-  cursor.execute(
-      "SELECT balance FROM customer_balances WHERE user_id = ?", (target_user.id,)
-  )
+  if is_postgres:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = %s",
+        (target_user.id,),
+    )
+  else:
+    cursor.execute(
+        "SELECT balance FROM customer_balances WHERE user_id = ?",
+        (target_user.id,),
+    )
+
   resultado = cursor.fetchone()
   balance = resultado[0] if resultado else 0.0
 
@@ -226,7 +264,6 @@ async def check_balance(
   )
 
   embed.set_thumbnail(url=target_user.display_avatar.url)
-
   embed.set_footer(
       text="MonToya Services • Balance Checker",
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
@@ -235,5 +272,7 @@ async def check_balance(
   await interaction.response.send_message(embed=embed)
 
 
+# Arranque seguro con la variable de entorno para la nube
+bot.run(os.environ["DISCORD_TOKEN"])
 # Arranque del bot (recuerda usar tu token local o de entorno según prefieras)
 bot.run(os.environ["DISCORD_TOKEN"])
