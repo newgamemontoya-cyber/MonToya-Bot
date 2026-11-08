@@ -33,7 +33,7 @@ async def on_ready():
     print(e)
 
 
-# 3. Comando Slash: /add_balance (Exclusivo para Staff)
+# 3. Comando Slash: /add_balance (Con foto de perfil del cliente)
 @bot.tree.command(
     name="add_balance",
     description="Adds an amount to a customer's total spent balance.",
@@ -71,7 +71,7 @@ async def add_balance(
   )
   conn.commit()
 
-  # Recibo Profesional (Azul - Ingreso)
+  # Recibo Profesional con miniatura del cliente
   embed = discord.Embed(
       title="🧾 MONTOYA SERVICES — PAYMENT RECORD",
       color=discord.Color.from_rgb(20, 110, 180),
@@ -96,6 +96,9 @@ async def add_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
+  # Agrega la foto de perfil del cliente en la esquina superior derecha
+  embed.set_thumbnail(url=customer.display_avatar.url)
+
   embed.set_footer(
       text="MonToya Services • Payment System",
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
@@ -104,7 +107,7 @@ async def add_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 4. NUEVO Comando Slash: /remove_balance (Exclusivo para Staff - Corrección)
+# 4. Comando Slash: /remove_balance (Con foto de perfil del cliente)
 @bot.tree.command(
     name="remove_balance",
     description="Removes an amount from a customer's total spent balance.",
@@ -131,7 +134,6 @@ async def remove_balance(
   resultado = cursor.fetchone()
 
   previous_balance = resultado[0] if resultado else 0.0
-  # Restamos, asegurándonos de que el balance nunca baje de 0
   new_balance = max(0.0, previous_balance - amount)
 
   cursor.execute(
@@ -143,7 +145,7 @@ async def remove_balance(
   )
   conn.commit()
 
-  # Recibo de Corrección (Rojo/Naranja - Resta)
+  # Recibo de Corrección con miniatura del cliente
   embed = discord.Embed(
       title="⚠️ MONTOYA SERVICES — BALANCE CORRECTION",
       color=discord.Color.from_rgb(215, 50, 50),
@@ -170,6 +172,9 @@ async def remove_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
+  # Agrega la foto de perfil del cliente
+  embed.set_thumbnail(url=customer.display_avatar.url)
+
   embed.set_footer(
       text="MonToya Services • Correction System",
       icon_url=bot.user.avatar.url if bot.user.avatar else None,
@@ -178,7 +183,7 @@ async def remove_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 5. Comando Slash: /check_balance (Consulta pública/privada de saldo)
+# 5. Comando Slash: /check_balance (Con foto de perfil del usuario consultado)
 @bot.tree.command(
     name="check_balance", description="Check your total spent balance."
 )
@@ -215,6 +220,9 @@ async def check_balance(
   embed.add_field(
       name="💵 Total Spent Balance", value=f"`${balance:.2f} USD`", inline=False
   )
+
+  # Agrega la foto de perfil del usuario que consulta
+  embed.set_thumbnail(url=target_user.display_avatar.url)
 
   embed.set_footer(
       text="MonToya Services • Balance Checker",
