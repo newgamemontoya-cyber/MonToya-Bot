@@ -3,8 +3,26 @@ import sqlite3
 import discord
 from discord import app_commands
 from discord.ext import commands
+from flask import Flask
+from threading import Thread
 
-# Detectar si estamos en Render (Nube) o en la PC (Local)
+# 1. Configuración del servidor web Flask para Render (Evita el error de puertos)
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "¡El bot de MonToya está activo y funcionando!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.start()
+
+
+# 2. Detectar si estamos en Render (Nube) o en la PC (Local)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if DATABASE_URL:
@@ -41,7 +59,8 @@ else:
   )
 conn.commit()
 
-# 2. Configuración del Bot de Discord
+
+# 3. Configuración del Bot de Discord
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -77,7 +96,7 @@ def guardar_balance(user_id, new_balance):
   conn.commit()
 
 
-# 3. Comando Slash: /add_balance
+# 4. Comando Slash: /add_balance
 @bot.tree.command(
     name="add_balance",
     description="Adds an amount to a customer's total spent balance.",
@@ -146,7 +165,7 @@ async def add_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 4. Comando Slash: /remove_balance
+# 5. Comando Slash: /remove_balance
 @bot.tree.command(
     name="remove_balance",
     description="Removes an amount from a customer's total spent balance.",
@@ -217,7 +236,7 @@ async def remove_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 5. Comando Slash: /check_balance
+# 6. Comando Slash: /check_balance
 @bot.tree.command(
     name="check_balance", description="Check your total spent balance."
 )
@@ -272,5 +291,11 @@ async def check_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# Arranque seguro con la variable de entorno para la nube
-bot.run(os.environ["DISCORD_TOKEN"])
+# 7. Inicio del servidor Flask y ejecución del Bot
+if __name__ == "__main__":
+  # Arranca Flask en segundo plano para abrir el puerto requerido por Render
+  keep_alive()
+  
+  # Arranca el bot de Discord utilizando la variable de entorno segura
+  TOKEN = os.environ.get("DISCORD_TOKEN")
+  bot.run(TOKEN)
