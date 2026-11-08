@@ -33,7 +33,7 @@ async def on_ready():
     print(e)
 
 
-# 3. Comando Slash: /add_balance (Con foto de perfil del cliente)
+# 3. Comando Slash: /add_balance (Staff primero, Customer después)
 @bot.tree.command(
     name="add_balance",
     description="Adds an amount to a customer's total spent balance.",
@@ -71,19 +71,21 @@ async def add_balance(
   )
   conn.commit()
 
-  # Recibo Profesional con miniatura del cliente
+  # Recibo Profesional (Staff primero, Customer después)
   embed = discord.Embed(
       title="🧾 MONTOYA SERVICES — PAYMENT RECORD",
       color=discord.Color.from_rgb(20, 110, 180),
   )
 
-  embed.add_field(
-      name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
-  )
+  # Primero el Staff
   embed.add_field(
       name="🛠️ Staff",
       value=f"{interaction.user.mention}\n`[{interaction.user.id}]`",
       inline=True,
+  )
+  # Después el Customer
+  embed.add_field(
+      name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
   )
 
   embed.add_field(name="💰 Amount Added", value=f"`+${amount:.2f}`", inline=False)
@@ -96,7 +98,7 @@ async def add_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
-  # Agrega la foto de perfil del cliente en la esquina superior derecha
+  # Foto de perfil del cliente en la miniatura
   embed.set_thumbnail(url=customer.display_avatar.url)
 
   embed.set_footer(
@@ -107,7 +109,7 @@ async def add_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 4. Comando Slash: /remove_balance (Con foto de perfil del cliente)
+# 4. Comando Slash: /remove_balance (Staff primero, Customer después)
 @bot.tree.command(
     name="remove_balance",
     description="Removes an amount from a customer's total spent balance.",
@@ -145,19 +147,21 @@ async def remove_balance(
   )
   conn.commit()
 
-  # Recibo de Corrección con miniatura del cliente
+  # Recibo de Corrección (Staff primero, Customer después)
   embed = discord.Embed(
       title="⚠️ MONTOYA SERVICES — BALANCE CORRECTION",
       color=discord.Color.from_rgb(215, 50, 50),
   )
 
-  embed.add_field(
-      name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
-  )
+  # Primero el Staff
   embed.add_field(
       name="🛠️ Staff",
       value=f"{interaction.user.mention}\n`[{interaction.user.id}]`",
       inline=True,
+  )
+  # Después el Customer
+  embed.add_field(
+      name="👤 Customer", value=f"{customer.mention}\n`[{customer.id}]`", inline=True
   )
 
   embed.add_field(
@@ -172,7 +176,7 @@ async def remove_balance(
       name="📈 New Balance Total", value=f"`${new_balance:.2f}`", inline=False
   )
 
-  # Agrega la foto de perfil del cliente
+  # Foto de perfil del cliente en la miniatura
   embed.set_thumbnail(url=customer.display_avatar.url)
 
   embed.set_footer(
@@ -183,7 +187,7 @@ async def remove_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# 5. Comando Slash: /check_balance (Con foto de perfil del usuario consultado)
+# 5. Comando Slash: /check_balance
 @bot.tree.command(
     name="check_balance", description="Check your total spent balance."
 )
@@ -221,7 +225,6 @@ async def check_balance(
       name="💵 Total Spent Balance", value=f"`${balance:.2f} USD`", inline=False
   )
 
-  # Agrega la foto de perfil del usuario que consulta
   embed.set_thumbnail(url=target_user.display_avatar.url)
 
   embed.set_footer(
@@ -232,7 +235,5 @@ async def check_balance(
   await interaction.response.send_message(embed=embed)
 
 
-# Arranque seguro con la variable de entorno para la nube
-bot.run(os.environ["DISCORD_TOKEN"])
-# REEMPLAZA 'TU_TOKEN_AQUI' CON TU TOKEN REAL
+# Arranque del bot (recuerda usar tu token local o de entorno según prefieras)
 bot.run(os.environ["DISCORD_TOKEN"])
